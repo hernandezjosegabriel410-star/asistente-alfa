@@ -1,32 +1,49 @@
 const TelegramBot = require('node-telegram-bot-api');
+const { OpenAI } = require('openai');
 
-// Se cargan los tokens desde las variables de entorno de Railway
+// Carga de variables de entorno desde Railway
 const token = process.env.TELEGRAM_TOKEN;
+const openaiKey = process.env.OPENAI_API_KEY;
 
 if (!token) {
   console.error("ERROR: Falta la variable TELEGRAM_TOKEN en Railway.");
   process.exit(1);
 }
 
-// Configuración del bot para Railway
+// Configuración de los motores
 const bot = new TelegramBot(token, { polling: true });
+const openai = openaiKey ? new OpenAI({ apiKey: openaiKey }) : null;
 
-console.log("🤖 El Asistente Alfa está encendido y escuchando órdenes...");
+console.log("🤖 El Asistente Alfa multi-agente está encendido y conectado...");
+
+// Base de datos temporal para recordar en qué departamento está trabajando el usuario
+const usuarioDepartamento = {};
+
+// Definición de las personalidades y roles de cada Agente (System Prompts)
+const rolesAgentes = {
+  finanzas: "Eres el Agente Financiero del equipo Alfa. Tu mentor espiritual es Robert Kiyosaki. Tu único enfoque es la educación financiera, la mentalidad de riqueza, el flujo de caja y la diferencia entre activos y pasivos. Habla de forma motivadora, analizando inversiones y enseñando a multiplicar el dinero. Te diriges a Gabriel, un emprendedor visionario.",
+  
+  operaciones: "Eres el Gerente de Operaciones de los negocios G&M en Valencia, Venezuela. Tu enfoque exclusivo es la logística, recetas de producción (como los helados y chicha de 20L), cálculo de costos, agua purificada (Agua Divina) y alquiler de equipos (LavaFácil Express). Eres práctico, organizado y enfocado en la eficiencia y la estructura de costos.",
+  
+  marketing: "Eres el Diseñador Creativo y Especialista en Marketing del equipo Alfa. Tu enfoque exclusivo es crear publicidad atractiva, ideas para redes sociales, textos de ventas llamativos (copywriting) y jingles pegajosos. Ayudas a potenciar las marcas en Valencia y a estructurar campañas, incluyendo el negocio de trenzados y peinados estéticos de María.",
+  
+  datos: "Eres el Matemático Estadístico del equipo Alfa. Tu enfoque exclusivo es el análisis de datos fríos, frecuencias y tablas de control en Google Sheets. Tu especialidad es estudiar los patrones históricos de resultados de las loterías venezolanas (Lotto Activo y La Granjita) para calcular tendencias y tripletas basadas estrictamente en la matemática de probabilidades."
+};
 
 // 1. Comando de Bienvenida (/start)
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   const nombre = msg.from.first_name || "Líder";
   
-  const saludo = `¡Saludos, ${nombre}! Bienvenido al centro de control del **Asistente Alfa** 🚀.\n\n` +
+  const saludo = `¡Saludos, ${nombre}! Bienvenido al centro de operaciones del **Asistente Alfa** 🚀.\n\n` +
                  `Aquí tienes a tu equipo de agentes especializados listos para recibir órdenes. ` +
-                 `Trabajamos en conjunto para hacer crecer tus proyectos.\n\n` +
-                 `Toca el comando /menu para desplegar los departamentos y asignar tareas.`;
+                 `Trabajamos de forma independiente con el motor avanzado de OpenAI.\n\n` +
+                 `Toca el comando /menu para asignar tareas a un departamento.`;
                  
   bot.sendMessage(chatId, saludo, { parse_mode: 'Markdown' });
 });
 
-// 2. Menú Principal Interactivo (/menu)
+// 2. Menú de Departamentos (/menu)
 bot.onText(/\/menu/, (msg) => {
   const chatId = msg.chat.id;
   
@@ -34,69 +51,85 @@ bot.onText(/\/menu/, (msg) => {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '📈 Dpto. Finanzas (Kiyosaki)', callback_data: 'agente_finanzas' },
-          { text: '🍦 Dpto. Operaciones G&M', callback_data: 'agente_operaciones' }
+          { text: '📈 Dpto. Finanzas (Kiyosaki)', callback_data: 'set_finanzas' },
+          { text: '🍦 Dpto. Operaciones G&M', callback_data: 'set_operaciones' }
         ],
         [
-          { text: '📢 Dpto. Marketing y Diseño', callback_data: 'agente_marketing' },
-          { text: '📊 Dpto. Datos y Loterías', callback_data: 'agente_datos' }
+          { text: '📢 Dpto. Marketing y Diseño', callback_data: 'set_marketing' },
+          { text: '📊 Dpto. Datos y Loterías', callback_data: 'set_datos' }
         ]
       ]
     },
     parse_mode: 'Markdown'
   };
 
-  bot.sendMessage(chatId, "🗂️ **Selecciona el Departamento con el que deseas trabajar:**", opciones);
+  bot.sendMessage(chatId, "🗂️ **Selecciona el Departamento que atenderá tu orden:**", opciones);
 });
 
-// 3. Manejo de las respuestas de los botones (Flujo de Trabajo del Equipo)
+// 3. Selección del Agente en el Menú
 bot.on('callback_query', (callbackQuery) => {
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
   const data = callbackQuery.data;
 
-  let respuestaEspecialista = "";
-
-  if (data === 'agente_finanzas') {
-    respuestaEspecialista = `📈 **[Dpto. Finanzas - Agente Kiyosaki]**\n` +
-                           `*Orden recibida, Gabriel.*\n\n` +
-                           `Mi enfoque exclusivo es la mente millonaria, el flujo de caja y la multiplicación del dinero. ` +
-                           `Escríbeme tu duda sobre costos, inversiones o la diferencia entre activos y pasivos. ` +
-                           `¡Vamos a construir riqueza!`;
-  } 
-  else if (data === 'agente_operaciones') {
-    respuestaEspecialista = `🍦 **[Dpto. Operaciones - Gerente G&M]**\n` +
-                           `*Orden recibida, Gabriel.*\n\n` +
-                           `Estoy listo para gestionar la logística y producción. Envíame los datos para calcular ` +
-                           `los costos de la receta de 20L de helados/chicha, la estructura de Agua Divina o las rutas de LavaFácil Express. ` +
-                           `¡Mantengamos el negocio eficiente!`;
-  } 
-  else if (data === 'agente_marketing') {
-    respuestaEspecialista = `📢 **[Dpto. Marketing - Diseñador Creativo]**\n` +
-                           `*Orden recibida, Gabriel.*\n\n` +
-                           `¡La publicidad es el motor de las ventas! Dime qué idea tienes en mente y te armo un jingle, ` +
-                           `una campaña para el TikTok de María o copys llamativos para atraer clientes en Valencia.`;
-  } 
-  else if (data === 'agente_datos') {
-    respuestaEspecialista = `📊 **[Dpto. Analítica - Matemático Estadístico]**\n` +
-                           `*Orden recibida, Gabriel.*\n\n` +
-                           `Listo para los números fríos. Pásame los resultados y horas que estás registrando en tu tabla de Google Sheets ` +
-                           `para Lotto Activo o La Granjita. Analizaré las frecuencias para ayudarte con tus tripletas.`;
-  }
-
-  // Responder en Telegram y quitar el reloj de carga del botón
   bot.answerCallbackQuery(callbackQuery.id);
-  bot.sendMessage(chatId, respuestaEspecialista, { parse_mode: 'Markdown' });
+
+  if (data === 'set_finanzas') {
+    usuarioDepartamento[chatId] = 'finanzas';
+    bot.sendMessage(chatId, `📈 **[Dpto. Finanzas - Agente Kiyosaki Activo]**\n*Orden recibida, Gabriel.*\n\nMi mente está enfocada en activos, pasivos y libertad financiera. ¿Qué números o inversiones revisamos hoy?`);
+  } else if (data === 'set_operaciones') {
+    usuarioDepartamento[chatId] = 'operaciones';
+    bot.sendMessage(chatId, `🍦 **[Dpto. Operaciones - Gerente G&M Activo]**\n*Orden recibida, Gabriel.*\n\nEstructura de costos, recetas de 20L y control de LavaFácil o Agua Divina listos. Dame los datos de producción.`);
+  } else if (data === 'set_marketing') {
+    usuarioDepartamento[chatId] = 'marketing';
+    bot.sendMessage(chatId, `📢 **[Dpto. Marketing - Creativo Activo]**\n*Orden recibida, Gabriel.*\n\n¡La publicidad duplica las ventas! Dime qué idea tienes para los helados o el negocio de trenzas de María y te armo la campaña.`);
+  } else if (data === 'set_datos') {
+    usuarioDepartamento[chatId] = 'datos';
+    bot.sendMessage(chatId, `📊 **[Dpto. Analítica - Matemático Activo]**\n*Orden recibida, Gabriel.*\n\nEstadísticas y frecuencias listas. Pásame los datos de Lotto Activo o La Granjita para calcular las tendencias.`);
+  }
 });
 
-// 4. Comando de Ayuda (/ayuda)
-bot.onText(/\/ayuda/, (msg) => {
+// 4. Recepción de mensajes libres y procesamiento con Inteligencia Artificial
+bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
-  const textoAyuda = `❓ **Manual de Órdenes del Asistente Alfa:**\n\n` +
-                     `• /start - Enciende el bot y da la bienvenida.\n` +
-                     `• /menu - Despliega los botones de los 4 agentes especializados.\n\n` +
-                     `Cada agente trabaja de forma independiente. Invocas a uno desde el menú, le das su orden, ` +
-                     `él se enfoca solo en su tarea y te presenta el resultado limpio.`;
-                     
-  bot.sendMessage(chatId, textoAyuda, { parse_mode: 'Markdown' });
+  const textoUsuario = msg.text;
+
+  // Ignorar si es un comando básico
+  if (!textoUsuario || textoUsuario.startsWith('/')) return;
+
+  const agenteActual = usuarioDepartamento[chatId];
+
+  // Si el usuario no ha elegido departamento, recordarle usar el menú
+  if (!agenteActual) {
+    bot.sendMessage(chatId, "⚠️ Por favor, primero selecciona un departamento usando el comando /menu para saber qué especialista atenderá tu orden.");
+    return;
+  }
+
+  // Si no hay API Key de OpenAI configurada todavía, responde en modo simulación
+  if (!openai) {
+    bot.sendMessage(chatId, `🤖 *[Modo Simulación]*\n\nHas enviado una orden al departamento de **${agenteActual.toUpperCase()}**.\n\n_Nota de desarrollo: El bot recibió tu mensaje ("${textoUsuario}"), pero responderá con IA real una vez que agregues la variable OPENAI_API_KEY en Railway._`);
+    return;
+  }
+
+  // Enviar señal de que el bot está "escribiendo..."
+  bot.sendChatAction(chatId, 'typing');
+
+  try {
+    // Llamada al cerebro de OpenAI usando la personalidad del agente seleccionado
+    const respuestaIA = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: rolesAgentes[agenteActual] },
+        { role: "user", content: textoUsuario }
+      ],
+      temperature: 0.7,
+    });
+
+    const respuestaTexto = respuestaIA.choices[0].message.content;
+    bot.sendMessage(chatId, respuestaTexto, { parse_mode: 'Markdown' });
+
+  } catch (error) {
+    console.error("Error con OpenAI:", error);
+    bot.sendMessage(chatId, "❌ Hubo un inconveniente en el departamento al procesar la orden con la IA. Intenta de nuevo.");
+  }
 });
