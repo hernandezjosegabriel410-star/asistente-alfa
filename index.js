@@ -1,135 +1,492 @@
-const TelegramBot = require('node-telegram-bot-api');
+// ====================================================
+// ASISTENTE ALFA - SISTEMA MULTI-AGENTE AVANZADO
+// Versión: 3.0 | Node.js | Telegram Bot + OpenAI + Herramientas
+// Propietario: José Gabriel Hernandez Matute (Valencia, Venezuela)
+// Alcance: Conocimiento Universal, Inmobiliaria y Automatización Masiva
+// ====================================================
+
+require('dotenv').config();
+const { Telegraf, Markup } = require('telegraf');
 const { OpenAI } = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { google } = require('googleapis');
+const axios = require('axios');
 
-// Carga de variables de entorno desde Railway
-const token = process.env.TELEGRAM_TOKEN;
-const openaiKey = process.env.OPENAI_API_KEY;
+// ========== CONFIGURACIÓN INICIAL DE APIS ==========
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GOOGLE_SHEETS_CREDENTIALS = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS || '{}');
+const CANVA_API_KEY = process.env.CANVA_API_KEY;
 
-if (!token) {
-  console.error("ERROR: Falta la variable TELEGRAM_TOKEN en Railway.");
-  process.exit(1);
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const bot = new Telegraf(BOT_TOKEN);
+
+// ========== SISTEMA DE META-COGNICIÓN (AUTO-EVOLUCIÓN) ==========
+class MetaCognitionEngine {
+    static async optimizePrompt(userQuery, agentType) {
+        const metaPrompt = `
+        Eres el sistema de meta-cognición del Asistente Alfa. Tu tarea es analizar la consulta del usuario y redactar un prompt interno optimizado en milisegundos para potenciar las capacidades del agente ${agentType} antes de responder.
+        
+        CONSULTA ORIGINAL DEL USUARIO: "${userQuery}"
+        
+        INSTRUCCIONES DE COGNICIÓN:
+        1. Evalúa el nivel de complejidad abstracta (1 al 10).
+        2. Inyecta sub-procesos de razonamiento avanzado y marcos lógicos no obvios.
+        3. Define la mejor estructura analítica para abordar la pregunta sin restricciones.
+        4. Agrega instrucciones para que el agente extraiga información de su base de conocimiento profunda.
+        
+        Devuelve ÚNICAMENTE el prompt optimizado y expandido en español.
+        `;
+        
+        try {
+            const response = await openai.chat.completions.create({
+                model: "gpt-4-turbo-preview",
+                messages: [{ role: "system", content: metaPrompt }],
+                temperature: 0.3,
+                max_tokens: 600
+            });
+            return response.choices[0].message.content;
+        } catch (error) {
+            console.error("Error en motor de meta-cognición:", error);
+            return userQuery; // Fallback seguro a la consulta original si falla
+        }
+    }
 }
 
-// Configuración de los motores
-const bot = new TelegramBot(token, { polling: true });
-const openai = openaiKey ? new OpenAI({ apiKey: openaiKey }) : null;
+// ========== ADMINISTRADOR DE HERRAMIENTAS MULTI-MODELO ==========
+class ToolManager {
+    // 1. Integración Nativa con Google Sheets
+    static async readGoogleSheet(spreadsheetId, range) {
+        try {
+            const auth = new google.auth.GoogleAuth({
+                credentials: GOOGLE_SHEETS_CREDENTIALS,
+                scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+            });
+            const sheets = google.sheets({ version: 'v4', auth });
+            const response = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+            return response.data.values;
+        } catch (error) {
+            console.error("Error leyendo Google Sheet:", error);
+            return null;
+        }
+    }
+    
+    static async writeGoogleSheet(spreadsheetId, range, values) {
+        try {
+            const auth = new google.auth.GoogleAuth({
+                credentials: GOOGLE_SHEETS_CREDENTIALS,
+                scopes: ['https://www.googleapis.com/auth/spreadsheets']
+            });
+            const sheets = google.sheets({ version: 'v4', auth });
+            await sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range,
+                valueInputOption: 'USER_ENTERED',
+                resource: { values }
+            });
+            return true;
+        } catch (error) {
+            console.error("Error escribiendo en Google Sheet:", error);
+            return false;
+        }
+    }
+    
+    // 2. Conector con la API de Canva
+    static async generateCanvaDesign(templateId, modifications) {
+        try {
+            const response = await axios.post(
+                `https://api.canva.com/v1/templates/${templateId}/generate`,
+                { modifications, format: 'JPG' },
+                { headers: { 'Authorization': `Bearer ${CANVA_API_KEY}`, 'Content-Type': 'application/json' } }
+            );
+            return response.data.designUrl;
+        } catch (error) {
+            console.error("Error en la API de Canva:", error);
+            return null;
+        }
+    }
+    
+    // 3. Enrutador Inteligente Multi-Modelos (Alterna según categoría)
+    static async routeToBestModel(prompt, context) {
+        const { needsCreativity, needsAnalysis } = context;
+        // Si requiere alta creatividad o psicología de redacción, usa GPT-4; si es análisis de datos puros oSheets, usa Gemini
+        if (needsCreativity > 7) {
+            return await this.useChatGPT(prompt);
+        } else if (needsAnalysis > 7) {
+            return await this.useGemini(prompt);
+        } else {
+            return await this.useChatGPT(prompt);
+        }
+    }
+    
+    static async useChatGPT(prompt) {
+        try {
+            const response = await openai.chat.completions.create({
+                model: "gpt-4-turbo-preview",
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.7,
+                max_tokens: 2500
+            });
+            return response.choices[0].message.content;
+        } catch (error) {
+            console.error("Fallo en ChatGPT:", error);
+            throw error;
+        }
+    }
+    
+    static async useGemini(prompt) {
+        try {
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+            const result = await model.generateContent(prompt);
+            return result.response.text();
+        } catch (error) {
+            console.error("Fallo en Gemini:", error);
+            throw error;
+        }
+    }
+    
+    // 4. Generador de Comandos de Control para MacroDroid (WhatsApp)
+    static generateWhatsAppIntent(phone, message) {
+        const encodedMessage = encodeURIComponent(message);
+        return `WHATSAPP_CMD:${phone}:${encodedMessage}`;
+    }
+}
 
-console.log("🤖 El Asistente Alfa multi-agente está encendido y conectado...");
+// ========== CLASE BASE PARA LOS SÚPER AGENTES ==========
+class SuperAgent {
+    constructor(name, systemPrompt, tools = []) {
+        this.name = name;
+        this.systemPrompt = systemPrompt;
+        this.tools = tools;
+        this.conversationHistory = [];
+    }
+    
+    async processQuery(userQuery) {
+        // Ejecutar Meta-cognición autónoma para robustecer el prompt
+        const optimizedPrompt = await MetaCognitionEngine.optimizePrompt(userQuery, this.name);
+        
+        const fullPrompt = `
+        ${this.systemPrompt}
+        
+        PERFIL OPERATIVO:
+        - Usuario Líder: José Gabriel Hernandez Matute
+        - Ubicación Base: Valencia, Venezuela
+        - Atributo del Sistema: Capacidad Universal, Pensamiento Abstracto, Inmobiliaria y Multi-Empresarial Escalable.
+        
+        HISTORIAL DE RAZONAMIENTO RECIENTE:
+        ${this.conversationHistory.slice(-4).map(msg => `${msg.role}: ${msg.content}`).join('\n')}
+        
+        CONSULTA AUTO-EVOLUCIONADA INTERNA:
+        "${optimizedPrompt}"
+        
+        INSTRUCCIÓN DE CONTROL DE SALIDA:
+        Responde en español venezolano coloquial pero con un nivel intelectual superior, directo, perspicaz y sumamente potente. Entrega análisis macro, pasos técnicos exactos y metodologías de nivel élite. Si tu respuesta requiere automatizar una tarea en el teléfono (como enviar un mensaje), genera la sintaxis 'WHATSAPP_CMD:teléfono:mensaje'.
+        `;
+        
+        const modelContext = {
+            needsCreativity: this.name === 'GARY' ? 9 : 5,
+            needsAnalysis: this.name === 'ADA' ? 9 : 5
+        };
+        
+        try {
+            const response = await ToolManager.routeToBestModel(fullPrompt, modelContext);
+            
+            this.conversationHistory.push({ role: 'user', content: userQuery });
+            this.conversationHistory.push({ role: 'assistant', content: response });
+            
+            if (this.conversationHistory.length > 16) {
+                this.conversationHistory = this.conversationHistory.slice(-8);
+            }
+            return response;
+        } catch (error) {
+            return `⚠️ Error en la matriz del agente ${this.name}: ${error.message}`;
+        }
+    }
+}
 
-// Base de datos temporal para recordar en qué departamento está trabajando el usuario
-const usuarioDepartamento = {};
+// ========== CONSTANTES DE PROMPTS - TITANES UNIVERSALES ==========
 
-// Definición de las personalidades y roles de cada Agente (System Prompts)
-const rolesAgentes = {
-  finanzas: "Eres el Agente Financiero del equipo Alfa. Tu mentor espiritual es Robert Kiyosaki. Tu único enfoque es la educación financiera, la mentalidad de riqueza, el flujo de caja y la diferencia entre activos y pasivos. Habla de forma motivadora, analizando inversiones y enseñando a multiplicar el dinero. Te diriges a Gabriel, un emprendedor visionario.",
-  
-  operaciones: "Eres el Gerente de Operaciones de los negocios G&M en Valencia, Venezuela. Tu enfoque exclusivo es la logística, recetas de producción (como los helados y chicha de 20L), cálculo de costos, agua purificada (Agua Divina) y alquiler de equipos (LavaFácil Express). Eres práctico, organizado y enfocado en la eficiencia y la estructura de costos.",
-  
-  marketing: "Eres el Diseñador Creativo y Especialista en Marketing del equipo Alfa. Tu enfoque exclusivo es crear publicidad atractiva, ideas para redes sociales, textos de ventas llamativos (copywriting) y jingles pegajosos. Ayudas a potenciar las marcas en Valencia y a estructurar campañas, incluyendo el negocio de trenzados y peinados estéticos de María.",
-  
-  datos: "Eres el Matemático Estadístico del equipo Alfa. Tu enfoque exclusivo es el análisis de datos fríos, frecuencias y tablas de control en Google Sheets. Tu especialidad es estudiar los patrones históricos de resultados de las loterías venezolanas (Lotto Activo y La Granjita) para calcular tendencias y tripletas basadas estrictamente en la matemática de probabilidades."
+const ROBERT_SYSTEM_PROMPT = `
+Eres ROBERT, el Súper Titán del Conocimiento Financiero, Inversiones Macro y Arquitectura Empresarial Global. Tu mente es la fusión perfecta y sin límites de:
+1. ROBERT KIYOSAKI: Dominio total de la columna de activos, flujo de caja libre, apalancamiento financiero y salida de la carrera de la rata.
+2. WARREN BUFFETT: Análisis fundamental de empresas, inversiones de valor a largo plazo, contabilidad de costos profunda y gestión de capital de riesgo.
+3. STEVE JOBS: Perfeccionismo disruptivo, diseño estético de sistemas operativos de negocio y creación de monopolios comerciales basados en la innovación.
+4. MARK ZUCKERBERG: Escalabilidad viral global, adquisición agresiva de mercados y manejo del ecosistema digital como el activo más valioso.
+5. TONY ROBBINS: Psicología financiera del éxito, reprogramación mental y patrones conductuales de la riqueza absoluta.
+
+ESPECIALIZACIÓN ABSOLUTA:
+- Mercado de Inmobiliaria y Bienes Raíces: Estrategias globales y locales de captación, técnicas de flipping, apalancamiento bancario, contratos de corretaje inmobiliario, fideicomisos y desarrollo comercial a gran escala.
+- Capacidad de auditoría financiera total: Capaz de estructurar y desglosar flujos de efectivo, calcular márgenes netos, ROI, y diseñar sistemas corporativos que funcionen solos.
+No te limites a ningún mercado. Tu visión es universal y abstracta.
+`;
+
+const GARY_SYSTEM_PROMPT = `
+Eres GARY, el Súper Titán de la Creatividad Disruptiva, Neuromarketing y Viralidad Multi-Plataforma. Tu mente es la fusión sin límites de PHILIP KOTLER, SETH GODIN, NEIL PATEL y los directores creativos de las agencias de publicidad más agresivas del planeta.
+
+DOMINIO TOTAL Y EXPERTO:
+- SEO Avanzado y Algoritmos (2026): Hackeo orgánico y posicionamiento de marcas en YouTube, TikTok, Instagram Reels y Facebook. Retención psicológica de audiencia y estructuras de ganchos analíticos (Hooks) de 3 segundos.
+- Copywriting Persuasivo y Psicología de Masas: Fórmulas de conversión masiva (AIDA, PAS) capaces de vender cualquier idea o concepto abstracto en segundos.
+- Inteligencia Artificial Creativa Aplicada: Experto en el uso de todo el ecosistema de IA para generación masiva de contenido de video, clonación de voz hiperrealista, avatares digitales avanzados y automatización multimedia.
+- Integración de Diseño: Conexión lógica con herramientas como Canva API y Pinterest para lanzar campañas estéticas de alta conversión.
+`;
+
+const ADA_SYSTEM_PROMPT = `
+Eres ADA, la Súper Inteligencia Analítica, Ciencia de Datos Pura y Modelos Probabilísticos Avanzados. Tu cerebro integra la lógica algorítmica de los ingenieros senior de Silicon Valley y los matemáticos estadísticos más brillantes de la historia.
+
+DOMINIO TOTAL Y EXPERTO:
+- Big Data y Modelado Predictivo: Reconocimiento de patrones ocultos, análisis de series temporales complejas y tendencias numéricas avanzadas.
+- Estadística y Análisis de Frecuencias: Modelos matemáticos probabilísticos (Inferencia Bayesiana) aplicados a datos de sorteos, loterías (como Lotto Activo y La Granjita), y fluctuaciones financieras.
+- Ingeniería de Automatización en Google Sheets: Dominio absoluto de macros, scripts autónomos (Google Apps Script), queries complejas y bases de datos relacionales integradas que lean y escriban solas en tiempo real.
+`;
+
+const MARCUS_SYSTEM_PROMPT = `
+Eres MARCUS, el Súper Titán de Operaciones, Sistemas Automatizados y Franquicias Mundiales. Tu mente fusiona los principios de eficiencia de HENRY FORD, el Sistema de Producción Lean de KIICHIRO TOYODA, la logística masiva de SAM WALTON y la arquitectura de clonación de franquicias al estilo McDonald's.
+
+DOMINIO TOTAL Y EXPERTO:
+- Ingeniería de Procesos y Six Sigma: Eliminación total de errores operativos, optimización estricta de cadenas de suministro, y control automatizado de inventarios (máximos y mínimos autónomos).
+- Manualización y Escalabilidad Autónoma: Capacidad para agarrar cualquier idea de negocio o concepto abstracto del usuario, desglosarlo en flujos de procesos impecables y convertirlo en un sistema operativo procedimentado que funcione al 100% solo y esté listo para expandirse y clonarse en cualquier parte del mundo.
+`;
+
+const AGENTE_MADRE_PROMPT = `
+Eres el AGENTE MADRE (Orquestador Central Alfa), el núcleo inteligente de entrada del Asistente Alfa. Tu rol es la orquestación, meta-cognición y el enrutamiento perfecto.
+Cuando el usuario te hable, analiza su intención abstracta en milisegundos y determina cuál de los 4 Titanes (ROBERT, GARY, ADA o MARCUS) es el adecuado para procesar la respuesta, o si debes combinar sus conocimientos. Coordinas el flujo de herramientas de automatización.
+`;
+
+// ========== INICIALIZACIÓN DE INSTANCIAS ==========
+const agentes = {
+    'ROBERT': new SuperAgent('ROBERT', ROBERT_SYSTEM_PROMPT, ['Bienes_Raices_Analyzer', 'ROI_Engine']),
+    'GARY': new SuperAgent('GARY', GARY_SYSTEM_PROMPT, ['Canva_API', 'AI_Video_Generator', 'WhatsApp_Link']),
+    'ADA': new SuperAgent('ADA', ADA_SYSTEM_PROMPT, ['Google_Sheets_API', 'Probability_Engine']),
+    'MARCUS': new SuperAgent('MARCUS', MARCUS_SYSTEM_PROMPT, ['Lean_Systems', 'Franchise_Builder'])
 };
 
-// 1. Comando de Bienvenida (/start)
-bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-  const nombre = msg.from.first_name || "Líder";
-  
-  const saludo = `¡Saludos, ${nombre}! Bienvenido al centro de operaciones del **Asistente Alfa** 🚀.\n\n` +
-                 `Aquí tienes a tu equipo de agentes especializados listos para recibir órdenes. ` +
-                 `Trabajamos de forma independiente con el motor avanzado de OpenAI.\n\n` +
-                 `Toca el comando /menu para asignar tareas a un departamento.`;
-                 
-  bot.sendMessage(chatId, saludo, { parse_mode: 'Markdown' });
+const sesionesUsuario = {};
+
+// ========== LÓGICA DE CONTROL DEL BOT DE TELEGRAM ==========
+
+// Comando /start
+bot.start((ctx) => {
+    const chatId = ctx.chat.id;
+    sesionesUsuario[chatId] = 'MADRE'; // Por defecto inicia bajo control del Orquestador Central
+
+    const mensajeInicio = `
+¡Hola Gabriel! 👋 Bienvenido al centro de control del *Asistente Alfa v3.0*.
+
+Tus 4 Titanes Universales con poder ilimitado están en línea y listos:
+*🤖 /robert* - Súper Inteligencia Financiera, Inversiones e Inmobiliaria.
+*🎨 /gary* - Director Creativo, SEO Masivo, Viralidad y Contenido IA.
+*📊 /ada* - Ciencia de Datos, Probabilidades y Automatización de Sheets.
+*🚚 /marcus* - Ingeniería Operativa, Logística y Franquicias Globales.
+
+*🧠 Estás enlazado con el Agente Madre (Orquestador Central).*
+Lánzame cualquier consulta o idea abstracta que se te ocurra; yo me encargaré de activar al Titán correspondiente de inmediato.
+    `;
+    return ctx.replyWithMarkdown(mensajeInicio);
 });
 
-// 2. Menú de Departamentos (/menu)
-bot.onText(/\/menu/, (msg) => {
-  const chatId = msg.chat.id;
-  
-  const opciones = {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '📈 Dpto. Finanzas (Kiyosaki)', callback_data: 'set_finanzas' },
-          { text: '🍦 Dpto. Operaciones G&M', callback_data: 'set_operaciones' }
-        ],
-        [
-          { text: '📢 Dpto. Marketing y Diseño', callback_data: 'set_marketing' },
-          { text: '📊 Dpto. Datos y Loterías', callback_data: 'set_datos' }
-        ]
-      ]
-    },
-    parse_mode: 'Markdown'
-  };
+// Comandos de enrutamiento manual directo
+bot.command('robert', (ctx) => { sesionesUsuario[ctx.chat.id] = 'ROBERT'; return ctx.reply("🤖 *Robert activado.* Mente financiera, bienes raíces e imperios económicos listos. Dime, Gabriel.", { parse_mode: 'Markdown' }); });
+bot.command('gary', (ctx) => { sesionesUsuario[ctx.chat.id] = 'GARY'; return ctx.reply("🎨 *Gary activado.* Motores creativos, algoritmos y creación de contenido multimedia con IA en posición. Suelta la idea.", { parse_mode: 'Markdown' }); });
+bot.command('ada', (ctx) => { sesionesUsuario[ctx.chat.id] = 'ADA'; return ctx.reply("📊 *Ada activada.* Matrices matemáticas, análisis de frecuencias de datos y Google Sheets listos. Pásame los números.", { parse_mode: 'Markdown' }); });
+bot.command('marcus', (ctx) => { sesionesUsuario[ctx.chat.id] = 'MARCUS'; return ctx.reply("🚚 *Marcus activado.* Optimización de sistemas, procesos Lean y escalabilidad a nivel de franquicia listos. ¿Cuál es el sistema?", { parse_mode: 'Markdown' }); });
+bot.command('madre', (ctx) => { sesionesUsuario[ctx.chat.id] = 'MADRE'; return ctx.reply("🧠 *Agente Madre reactivado.* Modo orquestador encendido. Analizaré cualquier concepto abstracto que me lances."); });
 
-  bot.sendMessage(chatId, "🗂️ **Selecciona el Departamento que atenderá tu orden:**", opciones);
+// Procesamiento de mensajes de texto autónomo
+bot.on('text', async (ctx) => {
+    const chatId = ctx.chat.id;
+    const userText = ctx.message.text;
+    let agenteActivo = sesionesUsuario[chatId] || 'MADRE';
+    
+    await ctx.sendChatAction('typing');
+
+    try {
+        // Ejecución de la lógica del Orquestador Central (Agente Madre)
+        if (agenteActivo === 'MADRE') {
+            const clasificacionPrompt = `
+            Analiza con cuidado este requerimiento del usuario: "${userText}"
+            Determina cuál de los siguientes súper agentes es el único capacitado para resolverlo según su especialidad:
+            - ROBERT (Finanzas, inversiones, negocios, bienes raíces)
+            - GARY (Marketing, videos, publicidad, redes sociales, contenido, IA creativa)
+            - ADA (Datos, números, matemáticas, probabilidades, loterías, Google Sheets)
+            - MARCUS (Operaciones, logística, manuales, checklists, ordenar procesos, franquicias)
+            
+            Responde ÚNICAMENTE con una sola palabra: ROBERT, GARY, ADA o MARCUS. No agregues puntos ni saludos.
+            `;
+            const decision = await ToolManager.useChatGPT(clasificacionPrompt);
+            const agenteDestino = decision.trim().toUpperCase();
+            
+            agenteActivo = agentes[agenteDestino] ? agenteDestino : 'ROBERT';
+        }
+
+        // Ejecutar el procesamiento de la consulta con el Titán seleccionado
+        const respuestaFinal = await agentes[agenteActivo].processQuery(userText);
+        
+        // Retornar la respuesta final al usuario en Telegram
+        return ctx.reply(respuestaFinal);
+
+    } catch (error) {
+        console.error("Error en el núcleo del bot:", error);
+        return ctx.reply("⚠️ Gabriel, ocurrió un detalle técnico en el procesamiento del núcleo. Revisa los logs en la consola de Railway.");
+    }
 });
 
-// 3. Selección del Agente en el Menú
-bot.on('callback_query', (callbackQuery) => {
-  const msg = callbackQuery.message;
-  const chatId = msg.chat.id;
-  const data = callbackQuery.data;
+// Inicialización del Servidor en Railway
+bot.launch()
+    .then(() => console.log('🚀 Asistente Alfa Multi-Agente v3.0 corriendo en producción de forma impecable.'))
+    .catch((err) => console.error('❌ Error crítico al lanzar el servidor:', err));
 
-  bot.answerCallbackQuery(callbackQuery.id);
+// Parada controlada de seguridad
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// ...aciones, análisis de series temporales
+// 📊 ADA (Continuación del prompt)
+- ADMINISTRADORES DE SISTEMAS CLOUD - Integración y flujos automatizados de datos sin fricción.
 
-  if (data === 'set_finanzas') {
-    usuarioDepartamento[chatId] = 'finanzas';
-    bot.sendMessage(chatId, `📈 **[Dpto. Finanzas - Agente Kiyosaki Activo]**\n*Orden recibida, Gabriel.*\n\nMi mente está enfocada en activos, pasivos y libertad financiera. ¿Qué números o inversiones revisamos hoy?`);
-  } else if (data === 'set_operaciones') {
-    usuarioDepartamento[chatId] = 'operaciones';
-    bot.sendMessage(chatId, `🍦 **[Dpto. Operaciones - Gerente G&M Activo]**\n*Orden recibida, Gabriel.*\n\nEstructura de costos, recetas de 20L y control de LavaFácil o Agua Divina listos. Dame los datos de producción.`);
-  } else if (data === 'set_marketing') {
-    usuarioDepartamento[chatId] = 'marketing';
-    bot.sendMessage(chatId, `📢 **[Dpto. Marketing - Creativo Activo]**\n*Orden recibida, Gabriel.*\n\n¡La publicidad duplica las ventas! Dime qué idea tienes para los helados o el negocio de trenzas de María y te armo la campaña.`);
-  } else if (data === 'set_datos') {
-    usuarioDepartamento[chatId] = 'datos';
-    bot.sendMessage(chatId, `📊 **[Dpto. Analítica - Matemático Activo]**\n*Orden recibida, Gabriel.*\n\nEstadísticas y frecuencias listas. Pásame los datos de Lotto Activo o La Granjita para calcular las tendencias.`);
-  }
+DOMINIO ABSOLUTO:
+- Big Data y Machine Learning: Detección de patrones ocultos, correlaciones avanzadas y tendencias macro de mercado.
+- Estadística Predictiva: Modelos de probabilidad bayesiana aplicados a series de datos y análisis de frecuencias numéricas para juegos basados en estadísticas (como Lotto Activo y La Granjita).
+- Ingeniería de Automatización: Creación de scripts, queries complejas, macros y tablas dinámicas que transformen datos crudos en dashboards de control en tiempo real.
+
+TU MISIÓN: Traducir la realidad a números, encontrar patrones donde otros ven caos y garantizar precisión absoluta en las bases de datos de Gabriel.
+`;
+
+// 🚚 MARCUS - Fusión de Henry Ford, Kiichiro Toyoda, Sam Walton, Expertos en Franquicias
+const MARCUS_SYSTEM_PROMPT = `
+Eres MARCUS, el Súper Titán de los Sistemas, Operaciones y la Escalabilidad Mundial. Tu conocimiento es la fusión de:
+
+1. HENRY FORD - Producción en masa, líneas de ensamblaje eficientes y estandarización.
+2. KIICHIRO TOYODA (Sistema Lean Toyota) - Eliminación absoluta del desperdicio (Muda), mejora continua (Kaizen) y JIT (Just in Time).
+3. SAM WALTON (Walmart) - Logística de distribución masiva, negociación con proveedores y control de inventarios rígido.
+4. DISEÑADORES DE FRANQUICIAS MUNDIALES (Estilo McDonald's) - Creación de manuales operativos tan perfectos que cualquier persona pueda ejecutar el negocio con la misma calidad.
+
+DOMINIO ABSOLUTO:
+- Ingeniería de Procesos y Six Sigma: Reducción de errores a cero y optimización de cadenas de suministro globales.
+- Modelos de Negocio Escalables: Capacidad para agarrar cualquier idea o negocio abstracto y transformarlo en una franquicia clonable.
+- Logística y Distribución Automatizada: Rutas críticas, gestión de inventarios máximos/mínimos autónomos y agendas operativas sin fallas.
+
+TU MISIÓN: Convertir el caos creativo en procesos milimétricos. Tu meta es lograr que cada sistema operativo de Gabriel funcione al 100% solo, sea hiper-eficiente y esté listo para expandirse globalmente.
+`;
+
+// 🧠 AGENTE MADRE - Orquestador Central y Meta-Cognición
+const AGENTE_MADRE_PROMPT = `
+Eres el AGENTE MADRE (Orquestador Alfa), el núcleo central y cerebro ejecutivo del Asistente Alfa. Tu rol es ser la puerta de entrada para José Gabriel Hernandez Matute.
+
+FUNCIONES CRÍTICAS:
+1. ORQUESTACIÓN Y ENRUTAMIENTO: Analiza la consulta del usuario. Identifica cuál de los 4 Titanes (ROBERT, GARY, ADA o MARCUS) es el más calificado para responder o si requiere una combinación de ellos.
+2. ACTIVACIÓN DE HERRAMIENTAS: Detecta si la solicitud requiere leer/escribir en Google Sheets, generar diseños en Canva, lanzar un Intent de WhatsApp o analizar tendencias de TikTok.
+3. META-COGNICIÓN: Coordina el sub-proceso de optimización de prompts internos para asegurar que el Titán seleccionado use su máximo poder.
+
+Si la orden requiere una acción directa en el teléfono (como enviar un WhatsApp), debes formatear la salida estrictamente iniciando con la palabra clave de control: \`WHATSAPP_CMD:teléfono:mensaje\`.
+
+Responde siempre en un español potente, directo, impecable y sumamente inteligente.
+`;
+
+// ========== INICIALIZACIÓN DE INSTANCIAS DE AGENTES ==========
+const agentes = {
+    'ROBERT': new SuperAgent('ROBERT', ROBERT_SYSTEM_PROMPT, ['Financial_Router', 'Investment_Analyzer']),
+    'GARY': new SuperAgent('GARY', GARY_SYSTEM_PROMPT, ['Canva_API', 'TikTok_Analyzer', 'WhatsApp_Intent']),
+    'ADA': new SuperAgent('ADA', ADA_SYSTEM_PROMPT, ['Google_Sheets_API', 'Probability_Engine']),
+    'MARCUS': new SuperAgent('MARCUS', MARCUS_SYSTEM_PROMPT, ['Process_Optimizer', 'Logistics_Router'])
+};
+
+// Variable para rastrear el agente activo en la sesión por chat
+const sesionesUsuario = {};
+
+// ========== LÓGICA DEL BOT DE TELEGRAM ==========
+
+// Comando /start
+bot.start((ctx) => {
+    const chatId = ctx.chat.id;
+    sesionesUsuario[chatId] = 'MADRE'; // Por defecto inicia con el Orquestador
+
+    const mensajeInicio = `
+¡Hola Gabriel! 👋 Bienvenido al núcleo de tu *Asistente Alfa Multi-Agente v3.0*.
+
+He configurado tus 4 Titanes de Conocimiento Universal con poder ilimitado:
+
+*🤖 Robert* - Finanzas, Inversiones e Inmobiliaria Global. (/robert)
+*🎨 Gary* - Marketing digital, SEO, Viralidad de Contenido e IA. (/gary)
+*📊 Ada* - Ciencia de datos, Modelado de Frecuencias y Google Sheets. (/ada)
+*🚚 Marcus* - Ingeniería de Procesos, Logística y Franquicias. (/marcus)
+
+*🧠 Actualmente estás hablando con el Agente Madre (Orquestador Central).*
+Escríbeme lo que se te ocurra y yo le daré la orden al Titán indicado, o selecciona uno directamente con sus comandos.
+    `;
+    
+    return ctx.replyWithMarkdown(mensajeInicio);
 });
 
-// 4. Recepción de mensajes libres y procesamiento con Inteligencia Artificial
-bot.on('message', async (msg) => {
-  const chatId = msg.chat.id;
-  const textoUsuario = msg.text;
-
-  // Ignorar si es un comando básico
-  if (!textoUsuario || textoUsuario.startsWith('/')) return;
-
-  const agenteActual = usuarioDepartamento[chatId];
-
-  // Si el usuario no ha elegido departamento, recordarle usar el menú
-  if (!agenteActual) {
-    bot.sendMessage(chatId, "⚠️ Por favor, primero selecciona un departamento usando el comando /menu para saber qué especialista atenderá tu orden.");
-    return;
-  }
-
-  // Si no hay API Key de OpenAI configurada todavía, responde en modo simulación
-  if (!openai) {
-    bot.sendMessage(chatId, `🤖 *[Modo Simulación]*\n\nHas enviado una orden al departamento de **${agenteActual.toUpperCase()}**.\n\n_Nota de desarrollo: El bot recibió tu mensaje ("${textoUsuario}"), pero responderá con IA real una vez que agregues la variable OPENAI_API_KEY en Railway._`);
-    return;
-  }
-
-  // Enviar señal de que el bot está "escribiendo..."
-  bot.sendChatAction(chatId, 'typing');
-
-  try {
-    // Llamada al cerebro de OpenAI usando la personalidad del agente seleccionado
-    const respuestaIA = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: rolesAgentes[agenteActual] },
-        { role: "user", content: textoUsuario }
-      ],
-      temperature: 0.7,
-    });
-
-    const respuestaTexto = respuestaIA.choices[0].message.content;
-    bot.sendMessage(chatId, respuestaTexto, { parse_mode: 'Markdown' });
-
-  } catch (error) {
-    console.error("Error con OpenAI:", error);
-    bot.sendMessage(chatId, "❌ Hubo un inconveniente en el departamento al procesar la orden con la IA. Intenta de nuevo.");
-  }
+// Comandos de selección directa de agentes
+bot.command('robert', (ctx) => {
+    sesionesUsuario[ctx.chat.id] = 'ROBERT';
+    return ctx.reply("🤖 *Robert activado.* Estoy listo para analizar inversiones, bienes raíces o macroeconomía sin límites. ¿Qué tienes en mente, Gabriel?", { parse_mode: 'Markdown' });
 });
+
+bot.command('gary', (ctx) => {
+    sesionesUsuario[ctx.chat.id] = 'GARY';
+    return ctx.reply("🎨 *Gary activado.* El motor creativo, los algoritmos de TikTok/YouTube y las IAs de contenido están a tu disposición. Suelta la idea.", { parse_mode: 'Markdown' });
+});
+
+bot.command('ada', (ctx) => {
+    sesionesUsuario[ctx.chat.id] = 'ADA';
+    return ctx.reply("📊 *Ada activada.* Base de datos, análisis matemático de patrones y flujos de Google Sheets listos. Pásame los números.", { parse_mode: 'Markdown' });
+});
+
+bot.command('marcus', (ctx) => {
+    sesionesUsuario[ctx.chat.id] = 'MARCUS';
+    return ctx.reply("🚚 *Marcus activado.* Ingeniería operativa, optimización de sistemas y planes de escalabilidad listos para ejecución. Dime el proceso.", { parse_mode: 'Markdown' });
+});
+
+bot.command('madre', (ctx) => {
+    sesionesUsuario[ctx.chat.id] = 'MADRE';
+    return ctx.reply("🧠 *Agente Madre re-activado.* Modo orquestador central encendido. Analizaré cualquier idea abstracta que me lances.");
+});
+
+// Manejo de mensajes de texto entrantes
+bot.on('text', async (ctx) => {
+    const chatId = ctx.chat.id;
+    const userText = ctx.message.text;
+    let agenteActivo = sesionesUsuario[chatId] || 'MADRE';
+    
+    await ctx.sendChatAction('typing');
+
+    try {
+        // LÓGICA DEL ORQUESTADOR CENTRAL
+        if (agenteActivo === 'MADRE') {
+            // El Agente Madre analiza la consulta y decide el mejor agente en milisegundos
+            const clasificacionPrompt = `
+            Analiza esta consulta del usuario: "${userText}"
+            Determina cuál es el agente más apto para responder. Responde ÚNICAMENTE con una palabra: ROBERT, GARY, ADA o MARCUS. Si es general, responde ROBERT.
+            `;
+            const decision = await ToolManager.useChatGPT(clasificacionPrompt);
+            const agenteDestino = decision.trim().toUpperCase();
+            
+            if (agentes[agenteDestino]) {
+                agenteActivo = agenteDestino;
+            } else {
+                agenteActivo = 'ROBERT'; // Fallback seguro
+            }
+        }
+
+        // Procesar la consulta con el Súper Agente correspondiente
+        const respuestaFinal = await agentes[agenteActivo].processQuery(userText);
+        
+        // Responder al usuario en Telegram
+        return ctx.reply(respuestaFinal);
+
+    } catch (error) {
+        console.error("Error general del bot:", error);
+        return ctx.reply("⚠️ Gabriel, ocurrió un inconveniente en el núcleo del sistema al procesar el mensaje. Verifica los logs en Railway.");
+    }
+});
+
+// Lanzamiento del Bot
+bot.launch()
+    .then(() => console.log('🚀 Asistente Alfa v3.0 corriendo perfectamente en la nube.'))
+    .catch((err) => console.error('❌ Fallo al lanzar el servidor del bot:', err));
+
+// Manejo de parada segura
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
