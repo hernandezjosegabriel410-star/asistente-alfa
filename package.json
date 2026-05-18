@@ -1,12 +1,44 @@
+
 {
   "name": "asistente-alfa",
-  "version": "1.0.0",
-  "description": "Bot de Telegram",
+  "version": "3.0.0",
+  "description": "Asistente Alfa Multi-Agente - Bot de Telegram con IA para negocios G&M",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "build": "echo 'No build step required for Node.js'"
   },
+  "keywords": [
+    "telegram",
+    "bot",
+    "ai",
+    "assistant",
+    "venezuela",
+    "negocios",
+    "g&m"
+  ],
+  "author": "José Gabriel Hernandez Matute",
+  "license": "MIT",
   "dependencies": {
-    "telegraf": "^4.16.3"
-  }
+    "dotenv": "^16.4.5",
+    "telegraf": "^4.16.3",
+    "openai": "^4.28.0",
+    "@google/generative-ai": "^0.21.0",
+    "googleapis": "^128.0.0",
+    "axios": "^1.6.7",
+    "node-cache": "^5.1.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tu-usuario/asistente-alfa.git"
+  },
+  "homepage": "https://github.com/tu-usuario/asistente-alfa#readme"
 }
