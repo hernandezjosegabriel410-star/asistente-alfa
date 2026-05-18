@@ -2,30 +2,12 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npm ci --only=production",
-    "nixpacksConfig": {
-      "phases": {
-        "setup": {
-          "cmds": [
-            "curl -fsSL https://deb.nodesource.com/setup_18.x | bash -",
-            "apt-get update && apt-get install -y nodejs"
-          ]
-        },
-        "install": {
-          "cmds": ["npm ci --only=production"]
-        },
-        "build": {
-          "cmds": ["npm run build"]
-        }
-      },
-      "startCmd": "npm start"
-    }
+    "buildCommand": "npm ci --only=production"
   },
   "deploy": {
+    "startCommand": "npm start",
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3,
-    "healthcheckPath": "/",
-    "healthcheckTimeout": 10
+    "restartPolicyMaxRetries": 3
   }
 }
